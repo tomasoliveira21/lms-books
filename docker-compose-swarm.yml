@@ -2,18 +2,33 @@ services:
   lmsbooks:
     image: lmsbooks:latest
     environment:
-      - SPRING_PROFILES_ACTIVE=bootstrap
+      - SPRING_PROFILES_ACTIVE=${ENV:-dev},bootstrap
       - spring.datasource.url=jdbc:postgresql://postgres:${POSTGRES_PORT:-5432}/postgres
       - spring.datasource.username=postgres
       - spring.datasource.password=password
-      - file.upload-dir=/tmp/uploads-psoft-g1-instance1
+      - file.upload-dir=/tmp/uploads-${ENV:-dev}
       - spring.rabbitmq.host=rabbitmq
     volumes:
-      - "uploaded_files_volume_1:/tmp"
+      - "uploaded_files_volume:/tmp"
     deploy:
       replicas: 2
+      update_config: #2.7 System does not have a downtime when updating a service
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+      rollback_config: #2.3 Automatically rollback each service to a previous version
+        parallelism: 1
+        delay: 10s
+        failure_action: pause
+        monitor: 30s
+        max_failure_ratio: 0.2
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
     ports:
-      - "8087:8080"  # Expose the lmsbooks service on port 8087
+      - "8087:8080"
     networks:
       - lms_network
 
@@ -23,29 +38,47 @@ services:
       - POSTGRES_DB=postgres
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=password
+    volumes:
+      - "postgres_volume:/var/lib/postgresql/data"
     deploy:
-      replicas: 2
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
     ports:
-#      - "5432:5432"  # Default Postgres port for the first replica
-#      - "5433:5432"  # Postgres port for the second replica
-#      - "5434:5432"  # Postgres port for the third replica
-      - "5432-5450:5432"
-
+      - "5432:5432"
     networks:
       - lms_network
 
   rabbitmq:
-    image:	rabbitmq:3-management
-    container_name: rabbitmq
-    restart:	always
+    image: rabbitmq:3-management
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
     deploy:
       replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
     ports:
-      - "5672:5672"		#	RabbitMQ	main	port
-      - "15672:15672"		#	RabbitMQ	management	UI
-    environment:
-      RABBITMQ_DEFAULT_USER:	guest
-      RABBITMQ_DEFAULT_PASS:	guest
+      - "5672:5672"    # RabbitMQ main port
+      - "15672:15672"  # RabbitMQ management UI
+    networks:
+      - lms_network
+
+  test_runner: #2.4 Tests are run against the container
+    image: your-test-image:latest
+    depends_on:
+      - lmsbooks
+    command: mvn test
+    deploy:
+      replicas: 0
+      restart_policy:
+        condition: none
     networks:
       - lms_network
 
@@ -54,5 +87,5 @@ networks:
     driver: overlay
 
 volumes:
-  uploaded_files_volume_1:
-  uploaded_files_volume_2:
+  uploaded_files_volume:
+  postgres_volume:
