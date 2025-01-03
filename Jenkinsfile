@@ -2,13 +2,9 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_NAME = "odsoft/lmsbooks"
         IMAGE_TAG = "latest"
-        DOCKER_REGISTRY = "your-docker-registry-url"
-    }
-
-    parameters {
-        booleanParam(name: 'DEPLOY', defaultValue: false, description: 'Trigger deployment manually')
+        GITHUB_USERNAME = "tomasoliveira21"
+        REPOSITORY_NAME = "lmsbooks"
     }
 
     stages {
@@ -30,17 +26,18 @@ pipeline {
             steps {
                 echo 'Building Docker image...'
                 sh '''
-                    docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .
+                    docker build -t ghcr.io/${GITHUB_USERNAME}/${REPOSITORY_NAME}:${IMAGE_TAG} .
                 '''
             }
         }
 
         stage('Push Docker Image') {
             steps {
-                echo 'Pushing Docker image to repository...'
+                echo 'Pushing Docker image to GitHub Container Registry...'
                 sh '''
-                    echo "${DOCKER_PASSWORD}" | docker login ${DOCKER_REGISTRY} -u "${DOCKER_USERNAME}" --password-stdin
-                    docker push ${IMAGE_NAME}:${IMAGE_TAG}
+                    echo "${GITHUB_TOKEN}" | docker login ghcr.io -u "${GITHUB_USERNAME}" --password-stdin
+                    docker tag ${IMAGE_NAME}:${IMAGE_TAG} ghcr.io/${GITHUB_USERNAME}/${REPOSITORY_NAME}:${IMAGE_TAG}
+                    docker push ghcr.io/${GITHUB_USERNAME}/${REPOSITORY_NAME}:${IMAGE_TAG}
                 '''
             }
         }
